@@ -414,7 +414,9 @@ nextRepo:
 }
 
 func (d *driver) deleteRepo(ctx context.Context, repo *pfs.Repo, force bool) error {
-	d.initializePachConn()
+	if err := d.checkIsAuthorized(ctx, repo, auth.Scope_OWNER); err != nil {
+		return err
+	}
 	_, err := col.NewSTM(ctx, d.etcdClient, func(stm col.STM) error {
 		repos := d.repos.ReadWrite(stm)
 		repoRefCounts := d.repoRefCounts.ReadWriteInt(stm)
@@ -455,6 +457,14 @@ func (d *driver) deleteRepo(ctx context.Context, repo *pfs.Repo, force bool) err
 		commits.DeleteAll()
 		branches.DeleteAll()
 		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = d.pachClient.AuthAPIClient.SetACL(auth.In2Out(ctx), &auth.SetACLRequest{
+		Repo:   repo,
+		NewACL: nil,
 	})
 	return err
 }
